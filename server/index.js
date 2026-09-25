@@ -21,8 +21,10 @@ const gemini = demoMode || !process.env.GEMINI_API_KEY
   : new GeminiServices({
       apiKey: process.env.GEMINI_API_KEY,
       transcribeModel: process.env.TRANSCRIBE_MODEL || 'gemini-3.5-transcribe-live',
+      liveTranslateModel: process.env.LIVE_TRANSLATE_MODEL || 'gemini-3.5-live-translate-preview',
       translateModel: process.env.TRANSLATE_MODEL || 'gemini-3.5-flash-lite',
       captionSegmentMs: process.env.CAPTION_SEGMENT_MS || 5_000,
+      translationIntervalMs: process.env.TRANSLATION_INTERVAL_MS || 6_000,
     });
 const runners = new Map();
 
@@ -106,6 +108,7 @@ app.post('/api/rooms/:slug/reset', (request, response) => {
     target.startedAt = null;
     target.endedAt = null;
     target.interim = '';
+    target.translatedInterim = '';
     target.segments = [];
     target.metrics.audioMs = 0;
     target.metrics.errors = 0;
@@ -230,5 +233,5 @@ sockets.on('connection', (socket, _request, url) => {
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`Legenda Livre running at http://localhost:${port}`);
-  console.log(demoMode ? 'DEMO_MODE is enabled (no Gemini calls)' : 'Gemini live mode enabled');
+  console.log(demoMode ? 'DEMO_MODE is enabled (no Gemini calls)' : 'Gemini Live Translate enabled');
 });

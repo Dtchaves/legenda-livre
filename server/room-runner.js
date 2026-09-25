@@ -15,9 +15,8 @@ export class RoomRunner {
     this.demoMode = demoMode;
     this.transcriber = null;
     this.translationJobs = new Set();
-    this.translationActive = 0;
     this.translationPending = [];
-    this.maxConcurrentTranslations = 2;
+    this.translationPump = null;
     this.lastChunkAt = null;
     this.lastEndMs = 0;
     this.previousOriginal = '';
@@ -29,6 +28,8 @@ export class RoomRunner {
       onOpen: () => this.setStatus('live'),
       onInterim: (text) => this.handleInterim(text),
       onFinal: (text) => this.handleFinal(text),
+      onTranslatedInterim: (text) => this.handleTranslatedInterim(text),
+      onBilingualFinal: (caption) => this.handleBilingualFinal(caption),
       onError: (error) => this.handleError(error),
       onClose: () => {
         if (!this.stopped) this.setStatus('disconnected');
@@ -41,6 +42,7 @@ export class RoomRunner {
       ? new DemoTranscriber(callbacks)
       : this.gemini.createTranscriber({
           language: this.room.sourceLanguage,
+          targetLanguage: this.room.targetLanguage,
           glossary: this.room.glossary,
           callbacks,
         });
@@ -49,6 +51,7 @@ export class RoomRunner {
       room.startedAt = new Date().toISOString();
       room.endedAt = null;
       room.interim = '';
+      room.translatedInterim = '';
       room.metrics.audioMs = 0;
     }, 'status');
     await this.transcriber.connect();
@@ -64,16 +67,31 @@ export class RoomRunner {
 
   handleInterim(text) {
     const latency = this.lastChunkAt ? Date.now() - this.lastChunkAt : 0;
-    this.store.update(this.room.slug, (room) => {
+    this.store.updateTransient(this.room.slug, (room) => {
       room.interim = text.trim();
       if (latency >= 0) room.metrics.transcriptionLatencies.push(latency);
       room.metrics.transcriptionLatencies = room.metrics.transcriptionLatencies.slice(-200);
     }, 'interim');
   }
 
-  handleFinal(text) {
+  handleTranslatedInterim(text) {
+    this.store.updateTransient(this.room.slug, (room) => {
+      room.translatedInterim = String(text || '').trim();
+    }, 'translation-interim');
+  }
+
+  handleBilingualFinal({ original, translated }) {
+    const source = String(original || this.room.interim || '').trim();
+    const target = String(translated || '').trim();
+    if (!source && !target) return;
+    this.handleFinal(source || target, target);
+  }
+
+  handleFinal(text, translatedText = '') {
+    if (this.stopped) return;
     const clean = String(text || '').trim();
     if (!clean) return;
+    const liveTranslated = String(translatedText || '').trim();
     const receivedAt = Date.now();
     const endMs = Math.max(this.room.metrics.audioMs, this.lastEndMs + 500);
     const estimatedDuration = Math.max(1_000, clean.split(/\s+/).length / 2.4 * 1_000);
@@ -83,76 +101,82 @@ export class RoomRunner {
       startMs: Math.round(startMs),
       endMs: Math.round(endMs),
       original: clean,
-      translated: '',
+      translated: liveTranslated,
       originalAt: new Date(receivedAt).toISOString(),
-      translatedAt: null,
+      translatedAt: liveTranslated ? new Date(receivedAt).toISOString() : null,
     };
     this.lastEndMs = endMs;
     const transcriptLatency = this.lastChunkAt ? receivedAt - this.lastChunkAt : 0;
     this.store.update(this.room.slug, (room) => {
       room.interim = '';
+      room.translatedInterim = '';
       room.segments.push(segment);
       room.metrics.transcriptionLatencies.push(transcriptLatency);
       room.metrics.transcriptionLatencies = room.metrics.transcriptionLatencies.slice(-200);
+      if (liveTranslated) {
+        room.metrics.translationLatencies.push(transcriptLatency);
+        room.metrics.translationLatencies = room.metrics.translationLatencies.slice(-200);
+      }
     }, 'segment');
     const previousText = this.previousOriginal;
     this.previousOriginal = clean;
-    const job = this.enqueueTranslation(() => this.translateSegment(segment, receivedAt, previousText))
-      .catch((error) => this.handleTranslationError(segment, error))
-      .finally(() => this.translationJobs.delete(job));
+    if (liveTranslated) return;
+    this.translationPending.push({ segment, startedAt: receivedAt, previousText });
+    this.startTranslationPump();
+  }
+
+  startTranslationPump() {
+    if (this.translationPump || !this.translationPending.length) return;
+    const job = Promise.resolve()
+      .then(() => this.pumpTranslationBatches())
+      .finally(() => {
+        this.translationJobs.delete(job);
+        if (this.translationPump === job) this.translationPump = null;
+        if (!this.stopped && this.translationPending.length) this.startTranslationPump();
+      });
+    this.translationPump = job;
     this.translationJobs.add(job);
   }
 
-  enqueueTranslation(task) {
-    const job = new Promise((resolve, reject) => {
-      this.translationPending.push({ task, resolve, reject });
-    });
-    this.pumpTranslations();
-    return job;
-  }
-
-  pumpTranslations() {
-    while (this.translationActive < this.maxConcurrentTranslations && this.translationPending.length) {
-      const { task, resolve, reject } = this.translationPending.shift();
-      this.translationActive += 1;
-      Promise.resolve()
-        .then(task)
-        .then(resolve, reject)
-        .finally(() => {
-          this.translationActive -= 1;
-          this.pumpTranslations();
-        });
+  async pumpTranslationBatches() {
+    while (!this.stopped && this.translationPending.length) {
+      if (!this.demoMode) await this.gemini.reserveTranslationSlot();
+      if (this.stopped) break;
+      const items = this.translationPending.splice(0, 8);
+      try {
+        await this.translateSegments(items, { slotReserved: !this.demoMode });
+      } catch (error) {
+        this.handleTranslationError(items, error);
+      }
     }
   }
 
-  async translateSegment(segment, startedAt, previousText = '') {
-    let translated;
+  async translateSegments(items, { slotReserved = false } = {}) {
+    let translations;
     if (this.demoMode) {
       await new Promise((resolve) => setTimeout(resolve, 320));
-      translated = DEMO_TRANSLATIONS.get(segment.original) || `[ES] ${segment.original}`;
+      translations = items.map(({ segment }) => DEMO_TRANSLATIONS.get(segment.original) || `[ES] ${segment.original}`);
     } else {
-      translated = await this.gemini.translate({
-        text: segment.original,
+      translations = await this.gemini.translateBatch({
+        captions: items.map(({ segment }) => segment.original),
         sourceLanguage: this.room.sourceLanguage,
         targetLanguage: this.room.targetLanguage,
         glossary: this.room.glossary,
-        previousText,
-        onUpdate: (partial) => {
-          this.store.update(this.room.slug, (room) => {
-            const target = room.segments.find((item) => item.id === segment.id);
-            if (target) target.translated = partial;
-          }, 'translation-interim');
-        },
+        previousText: items[0]?.previousText || '',
+        slotReserved,
       });
     }
-    const latency = Date.now() - startedAt;
+    const completedAt = Date.now();
     this.store.update(this.room.slug, (room) => {
-      const target = room.segments.find((item) => item.id === segment.id);
-      if (target) {
-        target.translated = translated;
-        target.translatedAt = new Date().toISOString();
+      for (const [index, { segment, startedAt }] of items.entries()) {
+        const target = room.segments.find((item) => item.id === segment.id);
+        if (target) {
+          target.translated = translations[index];
+          target.translatedAt = new Date(completedAt).toISOString();
+          delete target.translationError;
+        }
+        room.metrics.translationLatencies.push(completedAt - startedAt);
       }
-      room.metrics.translationLatencies.push(latency);
       room.metrics.translationLatencies = room.metrics.translationLatencies.slice(-200);
     }, 'translation');
   }
@@ -166,11 +190,13 @@ export class RoomRunner {
     }, 'error');
   }
 
-  handleTranslationError(segment, error) {
+  handleTranslationError(items, error) {
     console.error(`[${this.room.slug}] translation`, error);
     this.store.update(this.room.slug, (room) => {
-      const target = room.segments.find((item) => item.id === segment.id);
-      if (target) target.translationError = error?.message || String(error);
+      for (const { segment } of items) {
+        const target = room.segments.find((item) => item.id === segment.id);
+        if (target) target.translationError = error?.message || String(error);
+      }
       room.metrics.errors += 1;
       room.lastError = error?.message || String(error);
     }, 'translation-error');
@@ -183,6 +209,7 @@ export class RoomRunner {
   async stop() {
     if (this.stopped) return;
     this.stopped = true;
+    this.translationPending.length = 0;
     await this.transcriber?.end();
     await Promise.race([
       Promise.allSettled([...this.translationJobs]),
@@ -192,6 +219,7 @@ export class RoomRunner {
       room.status = 'ended';
       room.endedAt = new Date().toISOString();
       room.interim = '';
+      room.translatedInterim = '';
     }, 'status');
   }
 }

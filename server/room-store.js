@@ -32,6 +32,7 @@ function publicRoom(room) {
     startedAt: room.startedAt,
     endedAt: room.endedAt,
     interim: room.interim,
+    translatedInterim: room.translatedInterim || '',
     segments: room.segments,
     metrics: {
       ...room.metrics,
@@ -59,6 +60,7 @@ export class RoomStore {
         const room = JSON.parse(fs.readFileSync(path.join(this.dataDirectory, filename), 'utf8'));
         room.status = 'idle';
         room.interim = '';
+        room.translatedInterim = '';
         room.metrics = {
           audioMs: 0,
           viewers: 0,
@@ -97,6 +99,7 @@ export class RoomStore {
       startedAt: null,
       endedAt: null,
       interim: '',
+      translatedInterim: '',
       segments: [],
       metrics: {
         audioMs: 0,
@@ -143,6 +146,15 @@ export class RoomStore {
     if (!room) return null;
     mutator(room);
     this.persist(room);
+    const snapshot = publicRoom(room);
+    this.emit(slug, { type: eventType, room: snapshot });
+    return snapshot;
+  }
+
+  updateTransient(slug, mutator, eventType = 'room') {
+    const room = this.rooms.get(slug);
+    if (!room) return null;
+    mutator(room);
     const snapshot = publicRoom(room);
     this.emit(slug, { type: eventType, room: snapshot });
     return snapshot;

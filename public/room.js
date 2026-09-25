@@ -78,8 +78,7 @@ function escapeHtml(value) {
 function renderCaptions() {
   if (!room) return;
   const latest = room.segments.at(-1);
-  const lastTranslated = [...room.segments].reverse().find((segment) => segment.translated);
-  const translated = latest?.translated || lastTranslated?.translated || (latest ? 'Translating…' : 'Waiting for speech…');
+  const translated = room.translatedInterim || latest?.translated || latest?.original || 'Waiting for speech…';
   const original = latest?.original || '';
   byId('translatedCaption').textContent = translated;
   byId('originalCaption').textContent = original;
@@ -176,7 +175,7 @@ async function startMicrophone() {
     audioContext = new AudioContext({ latencyHint: 'interactive' });
     audioSource = audioContext.createMediaStreamSource(mediaStream);
     await createAudioPipelineWithContext(audioSource, false);
-    setCaptureState(true, 'Microphone is live', 'Captions finalize automatically every few seconds');
+    setCaptureState(true, 'Microphone is live', 'Gemini Live Translate · original and translation streaming together');
   } catch (error) {
     await stopCapture(false);
     alert(error.message);
@@ -208,7 +207,7 @@ async function startFile(file) {
     await createAudioPipelineWithContext(audioSource, true);
     audioSource.addEventListener('ended', () => stopCapture());
     audioSource.start();
-    setCaptureState(true, 'Audio file is live', `${file.name} · ${Math.round(buffer.duration)} seconds`);
+    setCaptureState(true, 'Audio file is live', `Gemini Live Translate · ${file.name} · ${Math.round(buffer.duration)} seconds`);
   } catch (error) {
     await stopCapture(false);
     alert(error.message);

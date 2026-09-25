@@ -29,17 +29,16 @@ Built during the Nerdearla Vibeathon 2026.
 microphone / file
        │ browser AudioWorklet (mono PCM16, 16 kHz, 100 ms)
        ▼
-room WebSocket ──► Gemini Transcribe Live
-                          │ interim + final captions
-                          ▼
-                  ordered translation queue
-                          │ Gemini Flash-Lite + glossary
-                          ▼
-                 persistent room event store
-                    ├── audience clients
-                    ├── OBS browser source
-                    ├── operations dashboard
-                    └── SRT / VTT / TXT
+room WebSocket ──► Gemini Live Translate
+                          │ continuous original + translated text
+                          │
+                          ├──► persistent room event store
+                          │       ├── audience clients
+                          │       ├── OBS browser source
+                          │       ├── operations dashboard
+                          │       └── SRT / VTT / TXT
+                          │
+                          └──► rate-limited text fallback
 ```
 
 Each room owns exactly one upstream AI stream. Any number of viewers reuse the resulting caption events, so audience growth does not multiply inference calls. The included file-backed event store is intentionally simple for the hackathon deployment. For multiple backend instances, replace `RoomStore` with Redis Streams or another shared event log; the WebSocket and runner boundaries do not change.
@@ -62,9 +61,15 @@ The model IDs and maximum continuous-speech caption duration can be changed in `
 
 ```dotenv
 TRANSCRIBE_MODEL=gemini-3.5-transcribe-live
+LIVE_TRANSLATE_MODEL=gemini-3.5-live-translate-preview
 TRANSLATE_MODEL=gemini-3.5-flash-lite
 CAPTION_SEGMENT_MS=5000
+TRANSLATION_INTERVAL_MS=6000
 ```
+
+Keep the translation interval at 6 seconds on Gemini's free tier. Captions that arrive while a request is waiting or running are grouped into one structured translation call, preventing quota retries from turning into stale 40-second captions.
+
+For supported languages, `LIVE_TRANSLATE_MODEL` is the primary low-latency path and the text translation queue is only a fallback.
 
 ## Test without an API key
 
