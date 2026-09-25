@@ -68,3 +68,33 @@ test('streams translation updates before returning the complete caption', async 
   assert.deepEqual(updates, ['Hola', 'Hola mundo']);
   assert.equal(translated, 'Hola mundo');
 });
+
+test('retries a transient translation failure', async () => {
+  const service = Object.create(GeminiServices.prototype);
+  service.translateModel = 'test-model';
+  service.translationTimeoutMs = 1_500;
+  let attempts = 0;
+  service.ai = {
+    models: {
+      async generateContentStream() {
+        attempts += 1;
+        if (attempts === 1) throw new Error('temporary failure');
+        return {
+          async *[Symbol.asyncIterator]() {
+            yield { text: 'Reintentado' };
+          },
+        };
+      },
+    },
+  };
+
+  const translated = await service.translate({
+    text: 'Retried',
+    sourceLanguage: 'en-US',
+    targetLanguage: 'es-ES',
+    glossary: [],
+  });
+
+  assert.equal(attempts, 2);
+  assert.equal(translated, 'Reintentado');
+});

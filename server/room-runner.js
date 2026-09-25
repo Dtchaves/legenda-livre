@@ -15,6 +15,9 @@ export class RoomRunner {
     this.demoMode = demoMode;
     this.transcriber = null;
     this.translationJobs = new Set();
+    this.translationActive = 0;
+    this.translationPending = [];
+    this.maxConcurrentTranslations = 2;
     this.lastChunkAt = null;
     this.lastEndMs = 0;
     this.previousOriginal = '';
@@ -94,10 +97,32 @@ export class RoomRunner {
     }, 'segment');
     const previousText = this.previousOriginal;
     this.previousOriginal = clean;
-    const job = this.translateSegment(segment, receivedAt, previousText)
+    const job = this.enqueueTranslation(() => this.translateSegment(segment, receivedAt, previousText))
       .catch((error) => this.handleError(error))
       .finally(() => this.translationJobs.delete(job));
     this.translationJobs.add(job);
+  }
+
+  enqueueTranslation(task) {
+    const job = new Promise((resolve, reject) => {
+      this.translationPending.push({ task, resolve, reject });
+    });
+    this.pumpTranslations();
+    return job;
+  }
+
+  pumpTranslations() {
+    while (this.translationActive < this.maxConcurrentTranslations && this.translationPending.length) {
+      const { task, resolve, reject } = this.translationPending.shift();
+      this.translationActive += 1;
+      Promise.resolve()
+        .then(task)
+        .then(resolve, reject)
+        .finally(() => {
+          this.translationActive -= 1;
+          this.pumpTranslations();
+        });
+    }
   }
 
   async translateSegment(segment, startedAt, previousText = '') {

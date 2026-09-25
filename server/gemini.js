@@ -2,12 +2,13 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { languageName, normalizeLanguageCode } from '../public/languages.js';
 
 export class GeminiServices {
-  constructor({ apiKey, transcribeModel, translateModel, captionSegmentMs = 3_000 }) {
+  constructor({ apiKey, transcribeModel, translateModel, captionSegmentMs = 3_000, translationTimeoutMs = 4_000 }) {
     if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
     this.ai = new GoogleGenAI({ apiKey });
     this.transcribeModel = transcribeModel;
     this.translateModel = translateModel;
     this.captionSegmentMs = Math.min(15_000, Math.max(2_000, Number(captionSegmentMs) || 3_000));
+    this.translationTimeoutMs = Math.min(15_000, Math.max(1_500, Number(translationTimeoutMs) || 4_000));
   }
 
   createTranscriber({ language, glossary, callbacks }) {
@@ -40,24 +41,48 @@ export class GeminiServices {
       `CURRENT caption: ${text}`,
     ].filter(Boolean).join('\n');
 
-    const response = await this.ai.models.generateContentStream({
-      model: this.translateModel,
-      contents: prompt,
-      config: {
-        temperature: 0,
-        maxOutputTokens: 300,
-        // Gemini 3.x models use discrete thinking levels. A zero token budget
-        // is rejected by gemini-3.5-flash-lite with INVALID_ARGUMENT.
-        thinkingConfig: { thinkingLevel: "MINIMAL" },
-      },
-    });
-    let translated = '';
-    for await (const chunk of response) {
-      translated += String(chunk.text || '');
-      const partial = translated.trim().replace(/^['"]|['"]$/g, '');
-      if (partial) onUpdate?.(partial);
+    let bestPartial = '';
+    let lastError;
+    const timeoutMs = this.translationTimeoutMs || 4_000;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      let translated = '';
+      try {
+        const response = await this.ai.models.generateContentStream({
+          model: this.translateModel,
+          contents: prompt,
+          config: {
+            temperature: 0,
+            maxOutputTokens: 300,
+            abortSignal: controller.signal,
+            // Gemini 3.x models use discrete thinking levels. A zero token budget
+            // is rejected by gemini-3.5-flash-lite with INVALID_ARGUMENT.
+            thinkingConfig: { thinkingLevel: "MINIMAL" },
+          },
+        });
+        for await (const chunk of response) {
+          translated += String(chunk.text || '');
+          const partial = translated.trim().replace(/^['"]|['"]$/g, '');
+          if (partial) {
+            bestPartial = partial.length >= bestPartial.length ? partial : bestPartial;
+            onUpdate?.(partial);
+          }
+        }
+        const complete = translated.trim().replace(/^['"]|['"]$/g, '');
+        if (complete) return complete;
+        throw new Error('Gemini returned an empty translation');
+      } catch (error) {
+        lastError = error;
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 120));
+      } finally {
+        clearTimeout(timeout);
+      }
     }
-    return translated.trim().replace(/^['"]|['"]$/g, '');
+
+    if (bestPartial) return bestPartial;
+    throw new Error(`Translation failed after retry: ${lastError?.message || lastError}`);
   }
 }
 

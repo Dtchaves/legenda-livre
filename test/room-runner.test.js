@@ -23,12 +23,13 @@ test('demo runner produces original and translated caption events', async () => 
   assert.equal(result.status, 'ended');
 });
 
-test('starts new translations without waiting for older segments', async () => {
+test('runs two translations in parallel and queues additional work', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'legenda-runner-parallel-'));
   const store = new RoomStore({ dataDirectory: directory });
   const created = store.create({ title: 'Live', sourceLanguage: 'en-US', targetLanguage: 'es' });
   const raw = store.raw(created.slug);
   let releaseFirst;
+  let releaseSecond;
   const calls = [];
   const gemini = {
     translate({ text }) {
@@ -38,18 +39,29 @@ test('starts new translations without waiting for older segments', async () => {
           releaseFirst = () => resolve('Primera leyenda');
         });
       }
-      return Promise.resolve('Segunda leyenda');
+      if (text === 'Second caption') {
+        return new Promise((resolve) => {
+          releaseSecond = () => resolve('Segunda leyenda');
+        });
+      }
+      return Promise.resolve('Tercera leyenda');
     },
   };
   const runner = new RoomRunner({ store, room: raw, gemini, demoMode: false });
 
   runner.handleFinal('First caption');
   runner.handleFinal('Second caption');
+  runner.handleFinal('Third caption');
+  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(calls, ['First caption', 'Second caption']);
 
   releaseFirst();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, ['First caption', 'Second caption', 'Third caption']);
+  releaseSecond();
   await Promise.allSettled([...runner.translationJobs]);
   const result = store.get(created.slug);
   assert.equal(result.segments[0].translated, 'Primera leyenda');
   assert.equal(result.segments[1].translated, 'Segunda leyenda');
+  assert.equal(result.segments[2].translated, 'Tercera leyenda');
 });

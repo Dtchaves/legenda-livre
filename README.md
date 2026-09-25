@@ -64,6 +64,7 @@ The model IDs and maximum continuous-speech caption duration can be changed in `
 TRANSCRIBE_MODEL=gemini-3.5-transcribe-live
 TRANSLATE_MODEL=gemini-3.5-flash-lite
 CAPTION_SEGMENT_MS=3000
+TRANSLATION_TIMEOUT_MS=4000
 ```
 
 ## Test without an API key
