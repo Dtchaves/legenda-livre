@@ -58,11 +58,12 @@ npm start
 
 Open <http://localhost:8080>. For microphone capture, use `localhost` or HTTPS; browsers block microphone access on ordinary HTTP hosts.
 
-The two model IDs can be changed in `.env` without editing code:
+The model IDs and maximum continuous-speech caption duration can be changed in `.env` without editing code:
 
 ```dotenv
 TRANSCRIBE_MODEL=gemini-3.5-transcribe-live
 TRANSLATE_MODEL=gemini-3.5-flash-lite
+CAPTION_SEGMENT_MS=5500
 ```
 
 ## Test without an API key
@@ -92,7 +93,7 @@ Use headphones and a 30–60 second excerpt from a previous Nerdearla talk.
 1. Create an English room and add names and technical terms from the talk to the glossary.
 2. On the operator page, choose **Play audio file**.
 3. Confirm that interim text appears while the speaker is talking.
-4. Pause or wait for a natural pause and confirm that a final original caption and Spanish translation appear.
+4. Confirm that a final original caption and Spanish translation appear every few seconds, even during continuous speech.
 5. Open the audience URL in a private window and verify all three language display modes.
 6. Add the overlay URL to OBS as a Browser Source at 1920×1080.
 7. End the broadcast and download VTT and SRT.

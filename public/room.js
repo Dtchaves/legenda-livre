@@ -92,7 +92,7 @@ function renderTranscript() {
     <li>
       <time>${formatDuration(segment.startMs)}</time>
       <div><strong>${escapeHtml(segment.translated || 'Translating…')}</strong><p>${escapeHtml(segment.original)}</p></div>
-    </li>`).join('') : '<li class="empty-transcript">Final captions will appear here when the speaker pauses.</li>';
+    </li>`).join('') : '<li class="empty-transcript">Final captions will appear automatically every few seconds.</li>';
 }
 
 function connectViewer() {
@@ -165,7 +165,7 @@ async function startMicrophone() {
     audioContext = new AudioContext({ latencyHint: 'interactive' });
     audioSource = audioContext.createMediaStreamSource(mediaStream);
     await createAudioPipelineWithContext(audioSource, false);
-    setCaptureState(true, 'Microphone is live', 'Speak naturally; pause to commit a caption');
+    setCaptureState(true, 'Microphone is live', 'Captions finalize automatically every few seconds');
   } catch (error) {
     await stopCapture(false);
     alert(error.message);

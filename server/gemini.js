@@ -2,11 +2,12 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { languageName, normalizeLanguageCode } from '../public/languages.js';
 
 export class GeminiServices {
-  constructor({ apiKey, transcribeModel, translateModel }) {
+  constructor({ apiKey, transcribeModel, translateModel, captionSegmentMs = 5_500 }) {
     if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
     this.ai = new GoogleGenAI({ apiKey });
     this.transcribeModel = transcribeModel;
     this.translateModel = translateModel;
+    this.captionSegmentMs = Math.min(15_000, Math.max(2_000, Number(captionSegmentMs) || 5_500));
   }
 
   createTranscriber({ language, glossary, callbacks }) {
@@ -16,6 +17,7 @@ export class GeminiServices {
       language,
       glossary,
       callbacks,
+      captionSegmentMs: this.captionSegmentMs,
     });
   }
 
@@ -53,13 +55,16 @@ export class GeminiServices {
   }
 }
 
-class GeminiTranscriber {
-  constructor({ ai, model, language, glossary, callbacks }) {
+export class GeminiTranscriber {
+  constructor({ ai, model, language, glossary, callbacks, captionSegmentMs = 5_500 }) {
     this.ai = ai;
     this.model = model;
     this.language = language;
     this.glossary = glossary;
     this.callbacks = callbacks;
+    this.captionSegmentMs = captionSegmentMs;
+    this.segmentAudioMs = 0;
+    this.hasPendingAudio = false;
     this.session = null;
     this.closed = false;
   }
@@ -102,18 +107,31 @@ class GeminiTranscriber {
 
   send(buffer) {
     if (!this.session || this.closed) return;
+    const audio = Buffer.from(buffer);
     this.session.sendRealtimeInput({
       audio: {
-        data: Buffer.from(buffer).toString('base64'),
+        data: audio.toString('base64'),
         mimeType: 'audio/pcm;rate=16000',
       },
     });
+    this.hasPendingAudio = true;
+    this.segmentAudioMs += audio.byteLength / 2 / 16_000 * 1_000;
+    if (this.segmentAudioMs >= this.captionSegmentMs) this.commitSegment();
+  }
+
+  commitSegment() {
+    if (!this.session || this.closed || !this.hasPendingAudio) return;
+    // With automatic VAD enabled, audioStreamEnd immediately finalizes the
+    // current transcription. Sending the next audio chunk reopens the stream.
+    this.session.sendRealtimeInput({ audioStreamEnd: true });
+    this.segmentAudioMs = 0;
+    this.hasPendingAudio = false;
   }
 
   async end() {
     if (!this.session || this.closed) return;
+    this.commitSegment();
     this.closed = true;
-    this.session.sendRealtimeInput({ audioStreamEnd: true });
     await new Promise((resolve) => setTimeout(resolve, 1_200));
     this.session.close();
   }
