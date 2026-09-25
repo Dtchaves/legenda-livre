@@ -11,7 +11,9 @@ const overlayMode = mode === 'overlay';
 document.body.dataset.mode = mode;
 
 let room;
-let selectedLanguage = 'translated';
+// Operators need to monitor both sides of the pipeline. Audience and overlay
+// pages still open with the translated caption only.
+let selectedLanguage = operatorMode ? 'both' : 'translated';
 let viewerSocket;
 let ingestSocket;
 let audioContext;
@@ -92,8 +94,16 @@ function renderTranscript() {
   byId('transcript').innerHTML = segments.length ? segments.map((segment) => `
     <li>
       <time>${formatDuration(segment.startMs)}</time>
-      <div><strong>${escapeHtml(segment.translated || 'Translating…')}</strong><p>${escapeHtml(segment.original)}</p></div>
+      <div>${renderTranscriptText(segment)}</div>
     </li>`).join('') : '<li class="empty-transcript">Final captions will appear automatically every few seconds.</li>';
+}
+
+function renderTranscriptText(segment) {
+  const original = escapeHtml(segment.original);
+  const translated = escapeHtml(segment.translated || 'Translating…');
+  if (selectedLanguage === 'original') return `<strong>${original}</strong>`;
+  if (selectedLanguage === 'translated') return `<strong>${translated}</strong>`;
+  return `<strong>${translated}</strong><p>${original}</p>`;
 }
 
 function connectViewer() {
@@ -243,10 +253,12 @@ async function stopCapture(notifyServer = true) {
 }
 
 for (const button of document.querySelectorAll('.language-switch button')) {
+  button.classList.toggle('active', button.dataset.language === selectedLanguage);
   button.addEventListener('click', () => {
     selectedLanguage = button.dataset.language;
     document.querySelectorAll('.language-switch button').forEach((item) => item.classList.toggle('active', item === button));
     renderCaptions();
+    renderTranscript();
   });
 }
 
