@@ -150,9 +150,9 @@ body[data-mode='captions'] .caption-stage { min-height: 55vh; }
 body[data-mode='overlay'] { background: transparent; overflow: hidden; }
 body[data-mode='overlay'] .topbar, body[data-mode='overlay'] .room-heading, body[data-mode='overlay'] .operator-layout, body[data-mode='overlay'] .transcript-panel { display: none; }
 body[data-mode='overlay'] .room-shell { max-width: none; height: 100vh; padding: 0; display: flex; align-items: flex-end; }
-body[data-mode='overlay'] .caption-stage { width: 100%; min-height: 0; margin: 0 5vw 5vh; padding: 24px 34px; border: 0; border-radius: 16px; background: rgba(2, 7, 13, .88); box-shadow: none; }
-body[data-mode='overlay'] .caption.translated { font-size: clamp(30px, 4vw, 64px); text-shadow: 0 2px 4px #000; }
-body[data-mode='overlay'] .caption.original { font-size: clamp(18px, 2vw, 30px); }
+body[data-mode='overlay'] .caption-stage { width: 100%; min-height: 0; margin: 0 7vw 4vh; padding: 16px 24px; border: 0; border-radius: 12px; background: rgba(2, 7, 13, .88); box-shadow: none; }
+body[data-mode='overlay'] .caption.translated { font-size: clamp(22px, 2.6vw, 42px); text-shadow: 0 2px 4px #000; }
+body[data-mode='overlay'] .caption.original { margin-top: 10px; font-size: clamp(14px, 1.35vw, 20px); }
 body[data-mode='overlay'] .caption.interim, body[data-mode='overlay'] .live-label { display: none; }
 
 @media (max-width: 860px) {
@@ -433,7 +433,8 @@ html[data-theme='classic'] .transcript-list p { color: #333; }
 
 html[data-theme='classic'] body[data-mode='overlay'] { background: transparent; }
 html[data-theme='classic'] body[data-mode='overlay'] .room-shell { margin: 0; border: 0; background: transparent; box-shadow: none; }
-html[data-theme='classic'] body[data-mode='overlay'] .caption-stage { margin: 0 4vw 4vh; border: 3px solid #fff; background: #808080; }
+html[data-theme='classic'] body[data-mode='overlay'] .caption-stage { margin: 0 7vw 4vh; padding: 10px; border: 3px solid #fff; background: #808080; }
+html[data-theme='classic'] body[data-mode='overlay'] .caption { min-height: 100px; padding: 26px 10px 10px; font-size: clamp(14px, 1.6vw, 22px); }
 
 @media (max-width: 860px) {
   html[data-theme='classic'] .hero { grid-template-columns: 1fr; }
