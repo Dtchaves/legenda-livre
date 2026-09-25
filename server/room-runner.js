@@ -112,6 +112,12 @@ export class RoomRunner {
         targetLanguage: this.room.targetLanguage,
         glossary: this.room.glossary,
         previousText,
+        onUpdate: (partial) => {
+          this.store.update(this.room.slug, (room) => {
+            const target = room.segments.find((item) => item.id === segment.id);
+            if (target) target.translated = partial;
+          }, 'translation-interim');
+        },
       });
     }
     const latency = Date.now() - startedAt;

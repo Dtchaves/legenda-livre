@@ -21,7 +21,7 @@ export class GeminiServices {
     });
   }
 
-  async translate({ text, sourceLanguage, targetLanguage, glossary, previousText = '' }) {
+  async translate({ text, sourceLanguage, targetLanguage, glossary, previousText = '', onUpdate }) {
     if (!text.trim()) return '';
     const normalizedSource = normalizeLanguageCode(sourceLanguage);
     const normalizedTarget = normalizeLanguageCode(targetLanguage);
@@ -40,7 +40,7 @@ export class GeminiServices {
       `CURRENT caption: ${text}`,
     ].filter(Boolean).join('\n');
 
-    const response = await this.ai.models.generateContent({
+    const response = await this.ai.models.generateContentStream({
       model: this.translateModel,
       contents: prompt,
       config: {
@@ -51,7 +51,13 @@ export class GeminiServices {
         thinkingConfig: { thinkingLevel: "MINIMAL" },
       },
     });
-    return String(response.text || '').trim().replace(/^['"]|['"]$/g, '');
+    let translated = '';
+    for await (const chunk of response) {
+      translated += String(chunk.text || '');
+      const partial = translated.trim().replace(/^['"]|['"]$/g, '');
+      if (partial) onUpdate?.(partial);
+    }
+    return translated.trim().replace(/^['"]|['"]$/g, '');
   }
 }
 
