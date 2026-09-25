@@ -14,7 +14,7 @@ export class RoomRunner {
     this.gemini = gemini;
     this.demoMode = demoMode;
     this.transcriber = null;
-    this.translationQueue = Promise.resolve();
+    this.translationJobs = new Set();
     this.lastChunkAt = null;
     this.lastEndMs = 0;
     this.previousOriginal = '';
@@ -92,12 +92,15 @@ export class RoomRunner {
       room.metrics.transcriptionLatencies.push(transcriptLatency);
       room.metrics.transcriptionLatencies = room.metrics.transcriptionLatencies.slice(-200);
     }, 'segment');
-    this.translationQueue = this.translationQueue
-      .then(() => this.translateSegment(segment, receivedAt))
-      .catch((error) => this.handleError(error));
+    const previousText = this.previousOriginal;
+    this.previousOriginal = clean;
+    const job = this.translateSegment(segment, receivedAt, previousText)
+      .catch((error) => this.handleError(error))
+      .finally(() => this.translationJobs.delete(job));
+    this.translationJobs.add(job);
   }
 
-  async translateSegment(segment, startedAt) {
+  async translateSegment(segment, startedAt, previousText = '') {
     let translated;
     if (this.demoMode) {
       await new Promise((resolve) => setTimeout(resolve, 320));
@@ -108,11 +111,10 @@ export class RoomRunner {
         sourceLanguage: this.room.sourceLanguage,
         targetLanguage: this.room.targetLanguage,
         glossary: this.room.glossary,
-        previousText: this.previousOriginal,
+        previousText,
       });
     }
     const latency = Date.now() - startedAt;
-    this.previousOriginal = segment.original;
     this.store.update(this.room.slug, (room) => {
       const target = room.segments.find((item) => item.id === segment.id);
       if (target) {
@@ -141,7 +143,7 @@ export class RoomRunner {
     if (this.stopped) return;
     this.stopped = true;
     await this.transcriber?.end();
-    await this.translationQueue;
+    await Promise.allSettled([...this.translationJobs]);
     this.store.update(this.room.slug, (room) => {
       room.status = 'ended';
       room.endedAt = new Date().toISOString();

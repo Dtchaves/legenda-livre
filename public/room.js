@@ -76,7 +76,8 @@ function escapeHtml(value) {
 function renderCaptions() {
   if (!room) return;
   const latest = room.segments.at(-1);
-  const translated = latest?.translated || (latest ? 'Translating…' : 'Waiting for speech…');
+  const lastTranslated = [...room.segments].reverse().find((segment) => segment.translated);
+  const translated = latest?.translated || lastTranslated?.translated || (latest ? 'Translating…' : 'Waiting for speech…');
   const original = latest?.original || '';
   byId('translatedCaption').textContent = translated;
   byId('originalCaption').textContent = original;

@@ -2,12 +2,12 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { languageName, normalizeLanguageCode } from '../public/languages.js';
 
 export class GeminiServices {
-  constructor({ apiKey, transcribeModel, translateModel, captionSegmentMs = 5_500 }) {
+  constructor({ apiKey, transcribeModel, translateModel, captionSegmentMs = 3_000 }) {
     if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
     this.ai = new GoogleGenAI({ apiKey });
     this.transcribeModel = transcribeModel;
     this.translateModel = translateModel;
-    this.captionSegmentMs = Math.min(15_000, Math.max(2_000, Number(captionSegmentMs) || 5_500));
+    this.captionSegmentMs = Math.min(15_000, Math.max(2_000, Number(captionSegmentMs) || 3_000));
   }
 
   createTranscriber({ language, glossary, callbacks }) {
@@ -56,7 +56,7 @@ export class GeminiServices {
 }
 
 export class GeminiTranscriber {
-  constructor({ ai, model, language, glossary, callbacks, captionSegmentMs = 5_500 }) {
+  constructor({ ai, model, language, glossary, callbacks, captionSegmentMs = 3_000 }) {
     this.ai = ai;
     this.model = model;
     this.language = language;
