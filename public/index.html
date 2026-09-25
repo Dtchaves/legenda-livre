@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#08111f" />
+    <title>Legenda Livre — Live conference captions</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Legenda Livre home">
+        <span class="brand-mark">LL</span>
+        <span>Legenda Livre</span>
+      </a>
+      <div class="topbar-actions">
+        <label class="theme-picker"><span>Layout</span><select data-theme-select><option value="modern">Modern</option><option value="classic">Classic 1998</option></select></label>
+        <span id="environmentBadge" class="badge">checking…</span>
+        <a class="button button-ghost" href="https://github.com/" target="_blank" rel="noreferrer">Open source</a>
+      </div>
+    </header>
+
+    <main class="dashboard-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">ACCESSIBILITY, ROOM BY ROOM</p>
+          <h1>Every talk deserves<br /><span>to be understood.</span></h1>
+          <p class="hero-copy">Real-time transcription and technical translation for open conferences. One lightweight control room, any number of stages.</p>
+        </div>
+        <div class="hero-stat-grid" aria-label="Product summary">
+          <div class="hero-stat"><strong>&lt; 2s</strong><span>target transcript latency</span></div>
+          <div class="hero-stat"><strong>100</strong><span>glossary terms per room</span></div>
+          <div class="hero-stat"><strong>3</strong><span>export formats</span></div>
+          <div class="hero-stat"><strong>∞</strong><span>caption viewers</span></div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="panel create-panel">
+          <div class="section-heading">
+            <div><p class="eyebrow">NEW SESSION</p><h2>Create a room</h2></div>
+          </div>
+          <form id="createRoomForm" class="stack">
+            <label>Talk title<input name="title" required maxlength="120" placeholder="Open source AI at scale" /></label>
+            <label>Speaker<input name="speaker" maxlength="120" placeholder="Speaker name" /></label>
+            <section class="language-config">
+              <p class="eyebrow">LANGUAGE ROUTING</p>
+              <div class="field-row">
+                <label>Spoken language
+                  <select id="sourceLanguage" name="sourceLanguage"></select>
+                </label>
+                <label>Caption language
+                  <select id="targetLanguage" name="targetLanguage"></select>
+                </label>
+              </div>
+              <small>Automatic detection or 80+ BCP-47 language variants.</small>
+            </section>
+            <label>Technical glossary<textarea name="glossary" rows="4" placeholder="Kubernetes, WebAssembly, Gemini, speaker names"></textarea><small>Comma or line separated; up to 100 terms.</small></label>
+            <button class="button button-primary" type="submit">Create caption room <span>→</span></button>
+          </form>
+          <button id="createDemoRooms" class="button button-secondary full-width">Create two-room demo</button>
+          <p id="formMessage" class="form-message" role="status"></p>
+        </article>
+
+        <section class="rooms-section">
+          <div class="section-heading">
+            <div><p class="eyebrow">PRODUCTION CONTROL</p><h2>Live rooms</h2></div>
+            <button id="refreshRooms" class="icon-button" aria-label="Refresh rooms">↻</button>
+          </div>
+          <div id="rooms" class="rooms-list" aria-live="polite"></div>
+        </section>
+      </section>
+    </main>
+
+    <template id="roomCardTemplate">
+      <article class="room-card">
+        <div class="room-card-main">
+          <span class="status-dot"></span>
+          <div class="room-identity"><h3></h3><p class="speaker"></p></div>
+          <span class="room-status badge"></span>
+        </div>
+        <div class="room-metrics">
+          <div><span>Language</span><strong class="language"></strong></div>
+          <div><span>Audio</span><strong class="audio-time"></strong></div>
+          <div><span>Translation p95</span><strong class="latency"></strong></div>
+          <div><span>Viewers</span><strong class="viewers"></strong></div>
+        </div>
+        <div class="room-actions">
+          <a class="button button-primary operator-link">Operate</a>
+          <a class="button button-ghost captions-link">Audience view</a>
+          <a class="button button-ghost overlay-link">OBS overlay</a>
+          <button class="button button-danger delete-room" type="button">Delete</button>
+        </div>
+      </article>
+    </template>
+    <script type="module" src="/dashboard.js"></script>
+  </body>
+</html>

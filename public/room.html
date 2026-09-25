@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#08111f" />
+    <title>Legenda Livre</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="room-page">
+    <header class="topbar room-topbar">
+      <a class="brand" href="/"><span class="brand-mark">LL</span><span>Legenda Livre</span></a>
+      <div class="topbar-actions">
+        <label class="theme-picker"><span>Layout</span><select data-theme-select><option value="modern">Modern</option><option value="classic">Classic 1998</option></select></label>
+        <span id="connectionBadge" class="badge">connecting…</span>
+        <a id="dashboardLink" class="button button-ghost" href="/">Control room</a>
+      </div>
+    </header>
+
+    <main class="room-shell">
+      <section class="room-heading">
+        <div><p id="roomMode" class="eyebrow"></p><h1 id="roomTitle">Loading room…</h1><p id="roomSpeaker" class="room-speaker"></p></div>
+        <div class="language-switch" role="group" aria-label="Caption language">
+          <button data-language="translated" class="active">Español</button>
+          <button data-language="original">Original</button>
+          <button data-language="both">Both</button>
+        </div>
+      </section>
+
+      <section id="operatorPanel" class="operator-layout">
+        <article class="panel source-panel">
+          <p class="eyebrow">AUDIO SOURCE</p>
+          <h2>Start broadcasting</h2>
+          <p class="muted">Audio stays in this room's isolated AI session. Use headphones to avoid feedback.</p>
+          <div class="source-buttons">
+            <button id="microphoneButton" class="button button-primary">● Use microphone</button>
+            <label class="button button-secondary file-button">↑ Play audio file<input id="audioFile" type="file" accept="audio/*,video/*" /></label>
+            <button id="demoButton" class="button button-secondary" hidden>▶ Run 15s demo</button>
+            <button id="stopButton" class="button button-danger" disabled>■ End broadcast</button>
+          </div>
+          <div class="audio-status">
+            <div class="audio-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+            <div><strong id="captureStatus">Waiting for a source</strong><small id="captureDetail">PCM 16 kHz · mono · 100 ms chunks</small></div>
+          </div>
+          <div class="link-box"><span>Audience</span><code id="audienceUrl"></code><button data-copy="audienceUrl">Copy</button></div>
+          <div class="link-box"><span>OBS overlay</span><code id="overlayUrl"></code><button data-copy="overlayUrl">Copy</button></div>
+        </article>
+
+        <article class="panel metrics-panel">
+          <p class="eyebrow">LIVE HEALTH</p>
+          <div class="metric-grid">
+            <div><span>Status</span><strong id="statusMetric">idle</strong></div>
+            <div><span>Audio</span><strong id="audioMetric">00:00</strong></div>
+            <div><span>Transcript p95</span><strong id="transcriptMetric">—</strong></div>
+            <div><span>Translation p95</span><strong id="translationMetric">—</strong></div>
+            <div><span>Viewers</span><strong id="viewerMetric">0</strong></div>
+            <div><span>Errors</span><strong id="errorMetric">0</strong></div>
+          </div>
+          <p class="eyebrow glossary-title">TECHNICAL GLOSSARY</p>
+          <div id="glossary" class="tag-list"></div>
+        </article>
+
+        <article class="panel language-panel">
+          <div>
+            <p class="eyebrow">LANGUAGE ROUTING</p>
+            <h2>Choose speech and caption languages</h2>
+            <p class="muted">Changes apply to the next broadcast. End an active broadcast before switching.</p>
+          </div>
+          <div class="language-editor">
+            <label>Spoken language<select id="operatorSourceLanguage"></select></label>
+            <span class="language-arrow">&rarr;</span>
+            <label>Caption language<select id="operatorTargetLanguage"></select></label>
+            <button id="saveLanguages" class="button button-primary" type="button">Save languages</button>
+          </div>
+          <p id="languageMessage" class="form-message" role="status"></p>
+        </article>
+      </section>
+
+      <section class="caption-stage" aria-live="polite" aria-atomic="true">
+        <div class="live-label"><span></span> LIVE CAPTIONS</div>
+        <div id="translatedCaption" class="caption translated">Waiting for speech…</div>
+        <div id="originalCaption" class="caption original"></div>
+        <div id="interimCaption" class="caption interim"></div>
+      </section>
+
+      <section id="transcriptPanel" class="panel transcript-panel">
+        <div class="section-heading">
+          <div><p class="eyebrow">TRANSCRIPT</p><h2>Committed captions</h2></div>
+          <div class="export-actions">
+            <a id="vttExport" class="button button-ghost">VTT</a>
+            <a id="srtExport" class="button button-ghost">SRT</a>
+            <a id="txtExport" class="button button-ghost">TXT</a>
+            <button id="resetButton" class="button button-ghost operator-only">Reset</button>
+          </div>
+        </div>
+        <ol id="transcript" class="transcript-list"></ol>
+      </section>
+    </main>
+    <script type="module" src="/room.js"></script>
+  </body>
+</html>

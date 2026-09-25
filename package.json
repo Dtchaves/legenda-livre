@@ -1,0 +1,22 @@
+{
+  "name": "legenda-livre",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Open-source, multi-room live captions and translation for technical conferences.",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test",
+    "check": "node --check server/index.js && node --check server/gemini.js && node --check public/room.js && node --check public/dashboard.js && node --check public/languages.js && node --check public/theme.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@google/genai": "^2.24.0",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "ws": "^8.18.3"
+  }
+}
