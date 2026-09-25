@@ -98,7 +98,7 @@ export class RoomRunner {
     const previousText = this.previousOriginal;
     this.previousOriginal = clean;
     const job = this.enqueueTranslation(() => this.translateSegment(segment, receivedAt, previousText))
-      .catch((error) => this.handleError(error))
+      .catch((error) => this.handleTranslationError(segment, error))
       .finally(() => this.translationJobs.delete(job));
     this.translationJobs.add(job);
   }
@@ -166,6 +166,16 @@ export class RoomRunner {
     }, 'error');
   }
 
+  handleTranslationError(segment, error) {
+    console.error(`[${this.room.slug}] translation`, error);
+    this.store.update(this.room.slug, (room) => {
+      const target = room.segments.find((item) => item.id === segment.id);
+      if (target) target.translationError = error?.message || String(error);
+      room.metrics.errors += 1;
+      room.lastError = error?.message || String(error);
+    }, 'translation-error');
+  }
+
   setStatus(status) {
     this.store.update(this.room.slug, (room) => { room.status = status; }, 'status');
   }
@@ -174,7 +184,10 @@ export class RoomRunner {
     if (this.stopped) return;
     this.stopped = true;
     await this.transcriber?.end();
-    await Promise.allSettled([...this.translationJobs]);
+    await Promise.race([
+      Promise.allSettled([...this.translationJobs]),
+      new Promise((resolve) => setTimeout(resolve, 2_000)),
+    ]);
     this.store.update(this.room.slug, (room) => {
       room.status = 'ended';
       room.endedAt = new Date().toISOString();
