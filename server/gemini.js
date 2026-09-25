@@ -18,13 +18,13 @@ function liveTranslationCode(language) {
 }
 
 export class GeminiServices {
-  constructor({ apiKey, transcribeModel, translateModel, liveTranslateModel, captionSegmentMs = 5_000, translationIntervalMs = 6_000 }) {
+  constructor({ apiKey, transcribeModel, translateModel, liveTranslateModel, captionSegmentMs = 3_000, translationIntervalMs = 6_000 }) {
     if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
     this.ai = new GoogleGenAI({ apiKey });
     this.transcribeModel = transcribeModel;
     this.translateModel = translateModel;
     this.liveTranslateModel = liveTranslateModel;
-    this.captionSegmentMs = Math.min(15_000, Math.max(2_000, Number(captionSegmentMs) || 5_000));
+    this.captionSegmentMs = Math.min(15_000, Math.max(2_000, Number(captionSegmentMs) || 3_000));
     this.translationIntervalMs = Math.max(4_100, Number(translationIntervalMs) || 6_000);
     this.nextTranslationAt = 0;
     this.translationSlot = Promise.resolve();
@@ -142,7 +142,7 @@ function appendTranscription(current, update) {
 }
 
 export class GeminiLiveTranslateTranscriber {
-  constructor({ ai, model, targetLanguageCode, callbacks, captionSegmentMs = 5_000 }) {
+  constructor({ ai, model, targetLanguageCode, callbacks, captionSegmentMs = 3_000 }) {
     this.ai = ai;
     this.model = model;
     this.targetLanguageCode = targetLanguageCode;
@@ -150,13 +150,14 @@ export class GeminiLiveTranslateTranscriber {
     this.captionSegmentMs = captionSegmentMs;
     this.providesTranslation = true;
     this.segmentAudioMs = 0;
-    this.hasPendingAudio = false;
+    this.hasSentAudio = false;
     this.inputText = '';
     this.outputText = '';
     this.inputFinished = false;
     this.outputFinished = false;
     this.commitRequested = false;
     this.flushTimer = null;
+    this.flushDueAt = 0;
     this.session = null;
     this.closed = false;
   }
@@ -213,18 +214,19 @@ export class GeminiLiveTranslateTranscriber {
         mimeType: 'audio/pcm;rate=16000',
       },
     });
-    this.hasPendingAudio = true;
+    this.hasSentAudio = true;
     this.segmentAudioMs += audio.byteLength / 2 / 16_000 * 1_000;
     if (this.segmentAudioMs >= this.captionSegmentMs) this.commitSegment();
   }
 
   commitSegment() {
-    if (!this.session || this.closed || !this.hasPendingAudio) return;
-    this.session.sendRealtimeInput({ audioStreamEnd: true });
+    if (!this.session || this.closed || !this.hasSentAudio) return;
+    // Live Translate is a continuous pipeline. Closing and immediately
+    // reopening its audio stream every few seconds can interrupt the response.
+    // Keep audio flowing and only cut the accumulated text into UI captions.
     this.segmentAudioMs = 0;
-    this.hasPendingAudio = false;
     this.commitRequested = true;
-    this.scheduleFlush(1_500);
+    this.scheduleFlush(this.inputText && this.outputText ? 350 : 1_500);
   }
 
   maybeFlush() {
@@ -237,13 +239,19 @@ export class GeminiLiveTranslateTranscriber {
   }
 
   scheduleFlush(delayMs) {
+    const dueAt = Date.now() + delayMs;
+    // Transcript updates arrive many times per second. A normal debounce would
+    // keep postponing the commit forever while somebody speaks continuously.
+    if (this.flushTimer && this.flushDueAt <= dueAt) return;
     clearTimeout(this.flushTimer);
-    this.flushTimer = setTimeout(() => this.flushSegment(), delayMs);
+    this.flushDueAt = dueAt;
+    this.flushTimer = setTimeout(() => this.flushSegment(), Math.max(0, dueAt - Date.now()));
   }
 
   flushSegment() {
     clearTimeout(this.flushTimer);
     this.flushTimer = null;
+    this.flushDueAt = 0;
     const original = this.inputText.trim();
     const translated = this.outputText.trim();
     if (original || translated) this.callbacks.onBilingualFinal?.({ original, translated });
@@ -256,8 +264,10 @@ export class GeminiLiveTranslateTranscriber {
 
   async end() {
     if (!this.session || this.closed) return;
-    this.commitSegment();
     this.closed = true;
+    // audioStreamEnd belongs at the real end of capture. The SDK/API can then
+    // finalize the last transcript before the WebSocket session is closed.
+    if (this.hasSentAudio) this.session.sendRealtimeInput({ audioStreamEnd: true });
     await new Promise((resolve) => setTimeout(resolve, 1_500));
     this.flushSegment();
     this.session.close();
@@ -265,7 +275,7 @@ export class GeminiLiveTranslateTranscriber {
 }
 
 export class GeminiTranscriber {
-  constructor({ ai, model, language, glossary, callbacks, captionSegmentMs = 5_000 }) {
+  constructor({ ai, model, language, glossary, callbacks, captionSegmentMs = 3_000 }) {
     this.ai = ai;
     this.model = model;
     this.language = language;

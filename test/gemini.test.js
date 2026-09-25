@@ -88,6 +88,45 @@ test('streams original and translated text through one live session', async () =
   assert.ok(sent[0].audio);
 });
 
+test('commits continuous Live Translate captions without ending the audio stream', async () => {
+  const sent = [];
+  const finals = [];
+  let liveCallbacks;
+  const transcriber = new GeminiLiveTranslateTranscriber({
+    ai: {
+      live: {
+        async connect({ callbacks }) {
+          liveCallbacks = callbacks;
+          return {
+            sendRealtimeInput(message) { sent.push(message); },
+            close() {},
+          };
+        },
+      },
+    },
+    model: 'live-translate-test',
+    targetLanguageCode: 'es',
+    captionSegmentMs: 200,
+    callbacks: { onBilingualFinal: (caption) => finals.push(caption) },
+  });
+
+  await transcriber.connect();
+  transcriber.send(Buffer.alloc(3_200));
+  transcriber.send(Buffer.alloc(3_200));
+  assert.equal(sent.some((message) => message.audioStreamEnd), false);
+
+  liveCallbacks.onmessage({
+    serverContent: {
+      inputTranscription: { text: 'Continuous speech' },
+      outputTranscription: { text: 'Habla continua' },
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 450));
+
+  assert.deepEqual(finals, [{ original: 'Continuous speech', translated: 'Habla continua' }]);
+  assert.equal(sent.some((message) => message.audioStreamEnd), false);
+});
+
 test('translates a structured caption batch without long SDK retries', async () => {
   const service = Object.create(GeminiServices.prototype);
   service.translateModel = 'test-model';

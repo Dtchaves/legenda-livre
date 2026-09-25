@@ -50,3 +50,23 @@ test('batches queued captions into one translation request', async () => {
   assert.equal(result.segments[1].translated, 'Segunda leyenda');
   assert.equal(result.segments[2].translated, 'Tercera leyenda');
 });
+
+test('keeps the final live caption received while stopping', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'legenda-runner-stop-'));
+  const store = new RoomStore({ dataDirectory: directory });
+  const created = store.create({ title: 'Live', sourceLanguage: 'en-US', targetLanguage: 'es' });
+  const raw = store.raw(created.slug);
+  const runner = new RoomRunner({ store, room: raw, gemini: null, demoMode: false });
+  runner.transcriber = {
+    async end() {
+      runner.handleBilingualFinal({ original: 'Last caption', translated: 'Última leyenda' });
+    },
+  };
+
+  await runner.stop();
+
+  const result = store.get(created.slug);
+  assert.equal(result.segments.length, 1);
+  assert.equal(result.segments[0].translated, 'Última leyenda');
+  assert.equal(result.status, 'ended');
+});

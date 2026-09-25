@@ -23,7 +23,7 @@ const gemini = demoMode || !process.env.GEMINI_API_KEY
       transcribeModel: process.env.TRANSCRIBE_MODEL || 'gemini-3.5-transcribe-live',
       liveTranslateModel: process.env.LIVE_TRANSLATE_MODEL || 'gemini-3.5-live-translate-preview',
       translateModel: process.env.TRANSLATE_MODEL || 'gemini-3.5-flash-lite',
-      captionSegmentMs: process.env.CAPTION_SEGMENT_MS || 5_000,
+      captionSegmentMs: process.env.CAPTION_SEGMENT_MS || 3_000,
       translationIntervalMs: process.env.TRANSLATION_INTERVAL_MS || 6_000,
     });
 const runners = new Map();

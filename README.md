@@ -4,6 +4,10 @@ Open-source, multi-room live captions and technical translation for conferences.
 
 Built during the Nerdearla Vibeathon 2026.
 
+## Demo video
+
+[Watch the Legenda Livre demo on YouTube](https://youtu.be/pPSVpZrRUyk)
+
 ## What works
 
 - Live microphone and local audio/video file input
@@ -63,7 +67,7 @@ The model IDs and maximum continuous-speech caption duration can be changed in `
 TRANSCRIBE_MODEL=gemini-3.5-transcribe-live
 LIVE_TRANSLATE_MODEL=gemini-3.5-live-translate-preview
 TRANSLATE_MODEL=gemini-3.5-flash-lite
-CAPTION_SEGMENT_MS=5000
+CAPTION_SEGMENT_MS=3000
 TRANSLATION_INTERVAL_MS=6000
 ```
 

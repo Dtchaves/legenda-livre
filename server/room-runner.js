@@ -20,6 +20,7 @@ export class RoomRunner {
     this.lastChunkAt = null;
     this.lastEndMs = 0;
     this.previousOriginal = '';
+    this.stopping = false;
     this.stopped = false;
   }
 
@@ -32,7 +33,7 @@ export class RoomRunner {
       onBilingualFinal: (caption) => this.handleBilingualFinal(caption),
       onError: (error) => this.handleError(error),
       onClose: () => {
-        if (!this.stopped) this.setStatus('disconnected');
+        if (!this.stopped && !this.stopping) this.setStatus('disconnected');
       },
       onGoAway: () => {
         this.store.update(this.room.slug, (room) => { room.metrics.reconnects += 1; }, 'metrics');
@@ -58,7 +59,7 @@ export class RoomRunner {
   }
 
   send(buffer) {
-    if (this.stopped) return;
+    if (this.stopped || this.stopping) return;
     this.lastChunkAt = Date.now();
     const audioMs = buffer.byteLength / 2 / 16_000 * 1_000;
     this.room.metrics.audioMs += audioMs;
@@ -126,20 +127,20 @@ export class RoomRunner {
   }
 
   startTranslationPump() {
-    if (this.translationPump || !this.translationPending.length) return;
+    if (this.stopped || this.stopping || this.translationPump || !this.translationPending.length) return;
     const job = Promise.resolve()
       .then(() => this.pumpTranslationBatches())
       .finally(() => {
         this.translationJobs.delete(job);
         if (this.translationPump === job) this.translationPump = null;
-        if (!this.stopped && this.translationPending.length) this.startTranslationPump();
+        if (!this.stopped && !this.stopping && this.translationPending.length) this.startTranslationPump();
       });
     this.translationPump = job;
     this.translationJobs.add(job);
   }
 
   async pumpTranslationBatches() {
-    while (!this.stopped && this.translationPending.length) {
+    while (!this.stopped && !this.stopping && this.translationPending.length) {
       if (!this.demoMode) await this.gemini.reserveTranslationSlot();
       if (this.stopped) break;
       const items = this.translationPending.splice(0, 8);
@@ -207,10 +208,13 @@ export class RoomRunner {
   }
 
   async stop() {
-    if (this.stopped) return;
+    if (this.stopped || this.stopping) return;
+    this.stopping = true;
+    await this.transcriber?.end();
+    // Keep accepting Live API callbacks while end() drains the final caption.
+    // Mark the runner stopped only after that last response has arrived.
     this.stopped = true;
     this.translationPending.length = 0;
-    await this.transcriber?.end();
     await Promise.race([
       Promise.allSettled([...this.translationJobs]),
       new Promise((resolve) => setTimeout(resolve, 2_000)),
